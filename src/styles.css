@@ -1933,3 +1933,30 @@ button,
 .handover-missing {
   margin-top: 10px;
 }
+.receipt-currency small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.handover .split-row.sub {
+  padding: 3px 0 3px 14px;
+  font-size: 14px;
+}
+.handover .split-row.sub b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.handover .split-row.total {
+  margin-top: 4px;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 9px;
+}
+.handover .split-row b small {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+  color: var(--ink-3);
+}

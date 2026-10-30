@@ -681,6 +681,10 @@ function Payments({
   const toCapital = round2(split.principal + split.extra);
   const dollar = useUsdRate();
   const usdRate = dollar.rate?.rate ?? 0;
+  // same rounding as the receipt: total converted once, extra = total - cuota
+  const totalUsd = usdRate > 0 ? round2(toCapital / usdRate) : 0;
+  const cuotaUsd = usdRate > 0 ? Math.min(totalUsd, round2(split.principal / usdRate)) : 0;
+  const extraUsd = round2(totalUsd - cuotaUsd);
   const previewBalance =
     capitalOnly && contributionPeriod === 0
       ? (previewRow?.opening ?? 0)
@@ -1035,16 +1039,37 @@ function Payments({
             {usdRate > 0 ? (
               <div className="handover" aria-label="Lo que entregas">
                 <span className="label">Lo que entregas</span>
-                <div className="split-row">
-                  <span>En colones (capital)</span>
-                  <b className="num">{money(toCapital)}</b>
-                </div>
                 {split.interest > 0 && (
                   <div className="split-row">
-                    <span>En dólares (intereses)</span>
-                    <b className="num">{usd(round2(split.interest / usdRate))}</b>
+                    <span>En colones (intereses)</span>
+                    <b className="num">{money(split.interest)}</b>
                   </div>
                 )}
+                {cuotaUsd > 0 && (
+                  <div className="split-row sub">
+                    <span>Dólares de la cuota</span>
+                    <b className="num">
+                      {usd(cuotaUsd)}
+                      <small>= {money(split.principal)}</small>
+                    </b>
+                  </div>
+                )}
+                {extraUsd > 0 && (
+                  <div className="split-row sub">
+                    <span>Dólares de monto extra</span>
+                    <b className="num">
+                      {usd(extraUsd)}
+                      <small>= {money(split.extra)}</small>
+                    </b>
+                  </div>
+                )}
+                <div className="split-row total">
+                  <span>Total en dólares (capital)</span>
+                  <b className="num">
+                    {usd(totalUsd)}
+                    <small>= {money(toCapital)}</small>
+                  </b>
+                </div>
                 <p className="split-note">
                   Tipo de cambio {money(usdRate)} por dólar
                   {dollar.rate?.date ? ` · ${date(dollar.rate.date)}` : ""}
@@ -1196,8 +1221,15 @@ function ReceiptDialog({
                     {d.currency.dollars > 0 && (
                       <>
                         {" + "}
-                        <b className="num">{usd(d.currency.dollars)}</b> en dólares
+                        <b className="num">{usd(d.currency.dollars)}</b> en dólares (={" "}
+                        {money(d.currency.capitalCrc)})
                       </>
+                    )}
+                    {d.currency.cuotaUsd > 0 && d.currency.extraUsd > 0 && (
+                      <small>
+                        {usd(d.currency.cuotaUsd)} ({money(d.currency.cuotaCrc)}) de la cuota +{" "}
+                        {usd(d.currency.extraUsd)} ({money(d.currency.extraCrc)}) de monto extra
+                      </small>
                     )}
                   </span>
                 )}

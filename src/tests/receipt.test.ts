@@ -52,11 +52,24 @@ describe("pago en dos monedas", () => {
     const state = { ...r.state, payments: [p] };
     const d = receiptData(state, p);
     expect(d.parts.interest).toBe(230064.85);
-    expect(d.currency).toEqual({ rate: 505.62, colones: 219935.15, dollars: 455.02, interestCrc: 230064.85 });
-    expect(round2(d.currency!.colones + d.parts.interest)).toBe(450000);
+    // intereses en colones; la cuota y el extra en dólares; el total se convierte una sola vez
+    expect(d.currency).toEqual({
+      rate: 505.62,
+      colones: 230064.85,
+      cuotaUsd: 45.8,
+      extraUsd: 389.18,
+      dollars: 434.98,
+      cuotaCrc: 23155.3,
+      extraCrc: 196779.85,
+      capitalCrc: 219935.15,
+    });
+    expect(round2(d.currency!.cuotaUsd + d.currency!.extraUsd)).toBe(d.currency!.dollars);
     const text = receiptText(state, p);
-    expect(text).toContain("Capital en colones: ₡219");
-    expect(text).toContain("Intereses en dólares: US$455,02");
+    expect(text).toContain("Intereses en colones: ₡230");
+    expect(text).toContain("Capital de la cuota en dólares: US$45,80");
+    expect(text).toContain("Monto extra en dólares: US$389,18");
+    expect(text).toContain("Total en dólares: US$434,98 (equivale a ₡219");
+    expect(text).toContain("US$45,80 (equivale a ₡23");
     const pdf = generatePaymentReceipt(state, p);
     expect(pdf.blob.size).toBeGreaterThan(1000);
   });

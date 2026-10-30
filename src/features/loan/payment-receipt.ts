@@ -11,17 +11,28 @@ export const money = (value: number) => `CRC ${amountFormat.format(round2(value)
 export const usdMoney = (value: number) => `USD ${amountFormat.format(round2(value)).replace(/\./g, " ")}`;
 
 /**
- * What was handed over in each currency: principal in colones, interest in
- * dollars at the rate saved with the payment. Null when no rate was saved.
+ * What was handed over in each currency: interest in colones, and the
+ * installment's principal and the extra contribution in dollars at the rate
+ * saved with the payment. The dollar total is the principal converted once;
+ * the extra is the total minus the installment part, so the parts always add
+ * up to it. Null when no rate was saved.
  */
 export function currencySplit(payment: Payment, parts: { interest: number; principal: number; extra: number }) {
   const rate = payment.usdRate;
   if (!rate || !(rate > 0)) return null;
+  const dollars = round2((parts.principal + parts.extra) / rate),
+    cuotaUsd = Math.min(dollars, round2(parts.principal / rate)),
+    extraUsd = round2(dollars - cuotaUsd);
+  // colones each dollar amount stands for, exactly as the ledger applies it
   return {
     rate,
-    colones: round2(parts.principal + parts.extra),
-    dollars: round2(parts.interest / rate),
-    interestCrc: parts.interest,
+    colones: parts.interest,
+    cuotaUsd,
+    extraUsd,
+    dollars,
+    cuotaCrc: parts.principal,
+    extraCrc: parts.extra,
+    capitalCrc: round2(parts.principal + parts.extra),
   };
 }
 export const longDate = (value: string) =>
@@ -108,9 +119,11 @@ export function receiptText(state: LoanState, payment: Payment) {
       ? [
           "",
           "*Cómo se pagó*",
-          `• Capital en colones: ${crc(d.currency.colones)}`,
+          ...(d.currency.colones > 0 ? [`• Intereses en colones: ${crc(d.currency.colones)}`] : []),
+          ...(d.currency.cuotaUsd > 0 ? [`• Capital de la cuota en dólares: US$${usdText(d.currency.cuotaUsd)} (equivale a ${crc(d.currency.cuotaCrc)})`] : []),
+          ...(d.currency.extraUsd > 0 ? [`• Monto extra en dólares: US$${usdText(d.currency.extraUsd)} (equivale a ${crc(d.currency.extraCrc)})`] : []),
           ...(d.currency.dollars > 0
-            ? [`• Intereses en dólares: US$${usdText(d.currency.dollars)} (a ${crc(d.currency.rate)} por dólar)`]
+            ? [`• Total en dólares: US$${usdText(d.currency.dollars)} (equivale a ${crc(d.currency.capitalCrc)}, a ${crc(d.currency.rate)} por dólar)`]
             : []),
         ]
       : []),
@@ -166,21 +179,31 @@ export function generatePaymentReceipt(state: LoanState, payment: Payment) {
 
   // Amount paid, the one number that matters most
   // With a saved rate the box also says what went in each currency
-  const boxH = currency ? 49 : 30;
+  const boxH = currency ? 62 : 30;
   doc.setFillColor(228, 235, 245);
   doc.rect(L, 46, R - L, boxH, "F");
   if (currency) {
     doc.setDrawColor(190, 204, 226);
     doc.setLineWidth(0.3);
     doc.line(L + 6, 76, R - 6, 76);
-    label("En colones (capital)", L + 6, 82);
-    text(money(currency.colones), L + 6, 88, { size: 11, bold: true });
-    if (currency.dollars > 0) {
-      label("En dólares (intereses)", L + 72, 82);
-      text(usdMoney(currency.dollars), L + 72, 88, { size: 11, bold: true });
-      label("Tipo de cambio", R - 6, 82, "right");
-      text(money(currency.rate), R - 6, 88, { size: 11, bold: true, align: "right" });
-    }
+    type Col = [string, string, string?];
+    const cols: Col[] = [
+      ...(currency.colones > 0 ? [["Colones · intereses", money(currency.colones)] as Col] : []),
+      ...(currency.cuotaUsd > 0
+        ? [["Dólares · cuota", usdMoney(currency.cuotaUsd), `= ${money(currency.cuotaCrc)}`] as Col]
+        : []),
+      ...(currency.extraUsd > 0
+        ? [["Dólares · extra", usdMoney(currency.extraUsd), `= ${money(currency.extraCrc)}`] as Col]
+        : []),
+      ["Total en dólares", usdMoney(currency.dollars), `= ${money(currency.capitalCrc)}`],
+    ];
+    const colW = (R - L - 12) / cols.length;
+    cols.forEach(([name, value, equiv], i) => {
+      label(name, L + 6 + colW * i, 82);
+      text(value, L + 6 + colW * i, 88, { size: 11, bold: true });
+      if (equiv) text(equiv, L + 6 + colW * i, 93.5, { size: 8.5, color: muted });
+    });
+    text(`Tipo de cambio: ${money(currency.rate)} por dólar`, L + 6, 102, { size: 8.5, color: muted });
   }
   label("Monto pagado", L + 6, 55);
   text(money(parts.total), L + 6, 68, { size: 24, bold: true, color: blue });
