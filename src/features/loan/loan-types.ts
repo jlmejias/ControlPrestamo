@@ -18,6 +18,11 @@ export type Payment = {
   kind?: "payment" | "principal-only";
   /** Date the money was actually paid; `date` is the scheduled date. */
   paidOn?: string;
+  /**
+   * Colones per US dollar on the day of the payment. When set, the interest
+   * part was handed over in dollars at this rate and the principal in colones.
+   */
+  usdRate?: number;
 };
 export type LoanState = { version: 1; config: LoanConfig; payments: Payment[] };
 export type Row = {

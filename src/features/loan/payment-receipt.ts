@@ -8,6 +8,22 @@ const amountFormat = new Intl.NumberFormat("de-DE", {
 });
 // The built-in PDF fonts have no colón sign (₡), so amounts read "CRC 1.234,56".
 export const money = (value: number) => `CRC ${amountFormat.format(round2(value)).replace(/\./g, " ")}`;
+export const usdMoney = (value: number) => `USD ${amountFormat.format(round2(value)).replace(/\./g, " ")}`;
+
+/**
+ * What was handed over in each currency: principal in colones, interest in
+ * dollars at the rate saved with the payment. Null when no rate was saved.
+ */
+export function currencySplit(payment: Payment, parts: { interest: number; principal: number; extra: number }) {
+  const rate = payment.usdRate;
+  if (!rate || !(rate > 0)) return null;
+  return {
+    rate,
+    colones: round2(parts.principal + parts.extra),
+    dollars: round2(parts.interest / rate),
+    interestCrc: parts.interest,
+  };
+}
 export const longDate = (value: string) =>
   new Intl.DateTimeFormat("es-CR", { dateStyle: "long" }).format(
     new Date(`${value}T12:00:00`),
@@ -67,7 +83,8 @@ export function receiptData(state: LoanState, payment: Payment) {
   const balanceNow = balanceAfter(state, upToThis, rowsAfter);
   const next = rowsAfter.find((r) => r.status === "Parcial" || r.status === "Proyectado");
   const pending = row && row.status === "Parcial" ? round2(row.due - row.paid) : 0;
-  return { index, capitalOnly, row, parts, balanceBefore, balanceNow, next, pending };
+  const currency = currencySplit(payment, parts);
+  return { index, capitalOnly, row, parts, balanceBefore, balanceNow, next, pending, currency };
 }
 
 /** Plain-text summary to send by WhatsApp, with the real colón sign. */
@@ -75,6 +92,8 @@ export function receiptText(state: LoanState, payment: Payment) {
   const d = receiptData(state, payment);
   const crc = (v: number) =>
     new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC" }).format(v);
+  const usdText = (v: number) =>
+    new Intl.NumberFormat("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
   const lines = [
     `*${d.capitalOnly ? "Comprobante de abono al capital" : "Comprobante de pago"} N.º ${String(d.index + 1).padStart(4, "0")}*`,
     `Fecha de pago: ${longDate(paidDate(payment))}`,
@@ -85,6 +104,16 @@ export function receiptText(state: LoanState, payment: Payment) {
       ? []
       : [`• Intereses: ${crc(d.parts.interest)}`, `• Capital de la cuota: ${crc(d.parts.principal)}`]),
     ...(d.parts.extra > 0 ? [`• Abono extra al capital: ${crc(d.parts.extra)}`] : []),
+    ...(d.currency
+      ? [
+          "",
+          "*Cómo se pagó*",
+          `• Capital en colones: ${crc(d.currency.colones)}`,
+          ...(d.currency.dollars > 0
+            ? [`• Intereses en dólares: US$${usdText(d.currency.dollars)} (a ${crc(d.currency.rate)} por dólar)`]
+            : []),
+        ]
+      : []),
     "",
     `Saldo anterior: ${crc(d.balanceBefore)}`,
     `*Saldo nuevo: ${crc(d.balanceNow)}*`,
@@ -99,7 +128,7 @@ export function receiptText(state: LoanState, payment: Payment) {
 }
 
 export function generatePaymentReceipt(state: LoanState, payment: Payment) {
-  const { index, capitalOnly, row, parts, balanceBefore, balanceNow, next, pending } =
+  const { index, capitalOnly, row, parts, balanceBefore, balanceNow, next, pending, currency } =
     receiptData(state, payment);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -136,8 +165,23 @@ export function generatePaymentReceipt(state: LoanState, payment: Payment) {
   line(39, ink, 0.6);
 
   // Amount paid, the one number that matters most
+  // With a saved rate the box also says what went in each currency
+  const boxH = currency ? 49 : 30;
   doc.setFillColor(228, 235, 245);
-  doc.rect(L, 46, R - L, 30, "F");
+  doc.rect(L, 46, R - L, boxH, "F");
+  if (currency) {
+    doc.setDrawColor(190, 204, 226);
+    doc.setLineWidth(0.3);
+    doc.line(L + 6, 76, R - 6, 76);
+    label("En colones (capital)", L + 6, 82);
+    text(money(currency.colones), L + 6, 88, { size: 11, bold: true });
+    if (currency.dollars > 0) {
+      label("En dólares (intereses)", L + 72, 82);
+      text(usdMoney(currency.dollars), L + 72, 88, { size: 11, bold: true });
+      label("Tipo de cambio", R - 6, 82, "right");
+      text(money(currency.rate), R - 6, 88, { size: 11, bold: true, align: "right" });
+    }
+  }
   label("Monto pagado", L + 6, 55);
   text(money(parts.total), L + 6, 68, { size: 24, bold: true, color: blue });
   label(capitalOnly ? "Aplicado como" : "Cuota", R - 6, 55, "right");
@@ -151,7 +195,7 @@ export function generatePaymentReceipt(state: LoanState, payment: Payment) {
     text(`Vencimiento: ${longDate(row.date)}`, R - 6, 69.5, { size: 9, color: muted, align: "right" });
 
   // How it was applied
-  let y = 90;
+  let y = 46 + boxH + 14;
   text("Cómo se aplicó el pago", L, y, { size: 12, bold: true });
   y += 4;
   line(y);
@@ -229,7 +273,7 @@ export function generatePaymentReceipt(state: LoanState, payment: Payment) {
   );
 
   // Signatures: useful for a private loan between people
-  const sy = 255;
+  const sy = Math.min(272, Math.max(255, y + 12));
   doc.setDrawColor(...ink);
   doc.setLineWidth(0.3);
   doc.line(L, sy, L + 70, sy);
@@ -238,7 +282,7 @@ export function generatePaymentReceipt(state: LoanState, payment: Payment) {
   text("Recibido por", R - 70, sy + 5, { size: 8.5, color: muted });
 
   text(
-    `Generado el ${longDate(new Date().toISOString().slice(0, 10))} con Mi Préstamo. Montos en colones costarricenses (CRC).`,
+    `Generado el ${longDate(new Date().toISOString().slice(0, 10))} con Mi Préstamo. Montos en colones costarricenses (CRC)${currency ? " salvo los indicados en dólares (USD)" : ""}.`,
     W / 2,
     285,
     { size: 7.5, color: muted, align: "center" },

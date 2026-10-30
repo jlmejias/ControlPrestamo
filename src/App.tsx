@@ -695,7 +695,10 @@ function Payments({
   }
   function save() {
     if (!draft) return;
-    const entries = allocate(() => crypto.randomUUID());
+    // keep the day's rate on each entry: the interest is paid in dollars
+    const entries = allocate(() => crypto.randomUUID()).map((entry) =>
+      usdRate > 0 ? { ...entry, usdRate } : entry,
+    );
     const p = entries.at(-1);
     if (!p) return;
     const nextState = {
@@ -1014,6 +1017,7 @@ function Payments({
                 </span>
                 <b className="num">{money(split.interest)}</b>
               </div>
+
               <div className="split-row">
                 <span>
                   <i className="dot capital" aria-hidden="true" />
@@ -1021,20 +1025,6 @@ function Payments({
                 </span>
                 <b className="num good">{money(toCapital)}</b>
               </div>
-              {usdRate > 0 ? (
-                <p className="split-usd">
-                  Equivale a <b className="num">{usd(toCapital / usdRate)}</b>{" "}
-                  <span>a {money(usdRate)} por dólar</span>
-                </p>
-              ) : (
-                <p className="split-usd">
-                  <span>
-                    {dollar.loading
-                      ? "Consultando el tipo de cambio…"
-                      : "Sin conexión para consultar el tipo de cambio."}
-                  </span>
-                </p>
-              )}
               {split.principal > 0 && split.extra > 0 && (
                 <p className="split-note">
                   {money(split.principal)} de la cuota +{" "}
@@ -1042,6 +1032,31 @@ function Payments({
                 </p>
               )}
             </div>
+            {usdRate > 0 ? (
+              <div className="handover" aria-label="Lo que entregas">
+                <span className="label">Lo que entregas</span>
+                <div className="split-row">
+                  <span>En colones (capital)</span>
+                  <b className="num">{money(toCapital)}</b>
+                </div>
+                {split.interest > 0 && (
+                  <div className="split-row">
+                    <span>En dólares (intereses)</span>
+                    <b className="num">{usd(round2(split.interest / usdRate))}</b>
+                  </div>
+                )}
+                <p className="split-note">
+                  Tipo de cambio {money(usdRate)} por dólar
+                  {dollar.rate?.date ? ` · ${date(dollar.rate.date)}` : ""}
+                </p>
+              </div>
+            ) : (
+              <p className="split-usd handover-missing">
+                {dollar.loading
+                  ? "Consultando el tipo de cambio…"
+                  : "Sin tipo de cambio: el comprobante saldrá solo en colones."}
+              </p>
+            )}
             <dl>
               {!capitalOnly && previewRow?.status === "Parcial" && (
                 <div>
@@ -1175,6 +1190,17 @@ function ReceiptDialog({
               <div className="receipt-amount">
                 <span className="label">Monto pagado</span>
                 <strong className="num">{money(d.parts.total)}</strong>
+                {d.currency && (
+                  <span className="receipt-currency">
+                    <b className="num">{money(d.currency.colones)}</b> en colones
+                    {d.currency.dollars > 0 && (
+                      <>
+                        {" + "}
+                        <b className="num">{usd(d.currency.dollars)}</b> en dólares
+                      </>
+                    )}
+                  </span>
+                )}
                 <span className="receipt-balance">
                   Saldo nuevo <b className="num">{money(d.balanceNow)}</b>
                 </span>

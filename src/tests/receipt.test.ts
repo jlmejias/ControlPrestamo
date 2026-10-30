@@ -43,3 +43,27 @@ describe("comprobante", () => {
     for (const p of s.payments) expect(generatePaymentReceipt(s, p as Payment).filename).toMatch(/\.pdf$/);
   });
 });
+
+describe("pago en dos monedas", () => {
+  it("el capital va en colones y los intereses en dólares al tipo de cambio guardado", async () => {
+    const { receiptData, receiptText } = await import("../features/loan/payment-receipt");
+    const r = pay(base, 450000, "2026-09-01");
+    const p = { ...r.entries[0], usdRate: 505.62 };
+    const state = { ...r.state, payments: [p] };
+    const d = receiptData(state, p);
+    expect(d.parts.interest).toBe(230064.85);
+    expect(d.currency).toEqual({ rate: 505.62, colones: 219935.15, dollars: 455.02, interestCrc: 230064.85 });
+    expect(round2(d.currency!.colones + d.parts.interest)).toBe(450000);
+    const text = receiptText(state, p);
+    expect(text).toContain("Capital en colones: ₡219");
+    expect(text).toContain("Intereses en dólares: US$455,02");
+    const pdf = generatePaymentReceipt(state, p);
+    expect(pdf.blob.size).toBeGreaterThan(1000);
+  });
+
+  it("sin tipo de cambio guardado el comprobante queda solo en colones", async () => {
+    const { receiptData } = await import("../features/loan/payment-receipt");
+    const r = pay(base, 450000, "2026-09-01");
+    expect(receiptData(r.state, r.entries[0]).currency).toBeNull();
+  });
+});
