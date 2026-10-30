@@ -1,0 +1,16 @@
+{
+  "name": "Mi Préstamo",
+  "short_name": "Mi Préstamo",
+  "description": "Control de pagos del préstamo de construcción",
+  "lang": "es-CR",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e9ece8",
+  "theme_color": "#1b2220",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+test-results
+playwright-report
+*.tsbuildinfo
+.vercel
+_respaldo-antes-ui
+
+.yarn/install-state.gz
