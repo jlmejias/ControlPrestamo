@@ -60,3 +60,39 @@ describe("estado de cuenta", () => {
     expect(generateStatement(s).filename).toMatch(/^estado-de-cuenta-/);
   });
 });
+
+describe("adelantar la siguiente cuota", () => {
+  it("paga la cuota que aún no vence y el excedente va a capital", () => {
+    const config = { principal: 34509726.97, annualRate: 8, years: 30, startDate: "2026-10-01", strategy: "recalculate" as const };
+    let n = 0;
+    const id = () => `p${n++}`;
+    const first = allocatePayment(config, [], { amount: 450000, manualExtra: 0, paidOn: "2026-10-01", note: "" }, id);
+    const rows1 = schedule(config, first);
+    const cuota2 = rows1[1].due;
+    // 25 días antes del vencimiento del periodo 2 (1 nov)
+    const early = allocatePayment(config, first, { amount: 450000, manualExtra: 0, paidOn: "2026-10-07", note: "", advance: true }, id);
+    expect(early).toHaveLength(1);
+    expect(early[0].kind).toBe("payment");
+    expect(early[0].period).toBe(2);
+    expect(early[0].paidOn).toBe("2026-10-07");
+    const rows2 = schedule(config, [...first, ...early]);
+    expect(rows2[1].status).toBe("Registrado");
+    expect(rows2[1].paid).toBe(450000);
+    expect(round2(rows2[1].interest + rows2[1].principal + rows2[1].extra)).toBe(450000);
+    expect(rows2[1].due).toBe(cuota2);
+    // sin adelantar, el mismo pago es abono al capital
+    const capital = allocatePayment(config, first, { amount: 450000, manualExtra: 0, paidOn: "2026-10-07", note: "", advance: false }, id);
+    expect(capital[0].kind).toBe("principal-only");
+  });
+
+  it("un adelanto parcial deja la cuota pendiente", () => {
+    const config = { principal: 1000000, annualRate: 8, years: 5, startDate: "2026-10-01", strategy: "recalculate" as const };
+    let n = 0;
+    const id = () => `p${n++}`;
+    const first = allocatePayment(config, [], { amount: 20276.39, manualExtra: 0, paidOn: "2026-10-01", note: "" }, id);
+    const part = allocatePayment(config, first, { amount: 5000, manualExtra: 0, paidOn: "2026-10-20", note: "", advance: true }, id);
+    const row = schedule(config, [...first, ...part])[1];
+    expect(row.status).toBe("Parcial");
+    expect(round2(row.due - row.paid)).toBeGreaterThan(0);
+  });
+});

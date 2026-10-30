@@ -146,6 +146,8 @@ export type PaymentInput = {
   manualExtra: number;
   paidOn: string;
   note: string;
+  /** Pay the next installment now even though it is not due yet. */
+  advance?: boolean;
 };
 // Turns one real payment into ledger entries:
 // - installments already due on `paidOn` are covered oldest first (a partial
@@ -161,11 +163,8 @@ export function allocatePayment(
   const amount = round2(input.amount),
     manual = round2(input.manualExtra || 0);
   const rows = schedule(config, payments);
-  const due = rows.filter(
-    (r) =>
-      (r.status === "Parcial" || r.status === "Proyectado") &&
-      r.date <= input.paidOn,
-  );
+  const open = rows.filter((r) => r.status === "Parcial" || r.status === "Proyectado");
+  const due = open.filter((r, i) => r.date <= input.paidOn || (input.advance && i === 0));
   if (!due.length) {
     const contributionPeriod = Math.max(
       0,

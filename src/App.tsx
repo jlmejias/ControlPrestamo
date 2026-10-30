@@ -549,6 +549,7 @@ const paySchema = z.object({
       "El abono no puede ser negativo",
     ),
   note: z.string(),
+  advance: z.boolean(),
   paidOn: z
     .string()
     .min(1, "Indica la fecha en que pagaste")
@@ -562,6 +563,7 @@ function Payments({
   state: LoanState;
   setState: SetLoan;
 }) {
+  const nav = useNavigate();
   const [editing, setEditing] = useState<Payment | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [receiptError, setReceiptError] = useState("");
@@ -597,6 +599,7 @@ function Payments({
       manualExtra: "0",
       note: "",
       paidOn: todayISO(),
+      advance: true,
     },
   });
   const selectedPeriod = watch("period");
@@ -629,6 +632,8 @@ function Payments({
       selectedRow.date <= paidOnInput &&
       selectedRow.status !== "Posterior",
   );
+  const advance = watch("advance");
+  const paysInstallment = scheduledPaymentAvailable || Boolean(selectedRow && advance);
   const amount = draft ? parseMoney(draft.amount) : 0;
   const manual = draft ? parseMoney(draft.manualExtra) || 0 : 0;
   const allocate = (makeId: () => string) =>
@@ -636,7 +641,13 @@ function Payments({
       ? allocatePayment(
           state.config,
           state.payments,
-          { amount, manualExtra: manual, paidOn: draft.paidOn, note: draft.note },
+                    {
+            amount,
+            manualExtra: manual,
+            paidOn: draft.paidOn,
+            note: draft.note,
+            advance: !scheduledPaymentAvailable && draft.advance,
+          },
           makeId,
         )
       : [];
@@ -710,6 +721,7 @@ function Payments({
       manualExtra: "0",
       note: "",
       paidOn: todayISO(),
+      advance: true,
     });
   }
   return (
@@ -734,10 +746,27 @@ function Payments({
               <CalendarClock />
               <div>
                 <b>La cuota del periodo {selectedPeriod} vence el {date(selectedRow.date)}</b>
-                <span>
-                  Como la cuota actual ya está pagada, un pago hecho antes de
-                  esa fecha se aplica como abono directo al capital.
-                </span>
+                <span>La cuota actual ya está pagada. ¿Cómo aplicas este pago?</span>
+                <div className="choice" role="radiogroup" aria-label="Cómo aplicar el pago">
+                  <label className={advance ? "on" : ""}>
+                    <input
+                      type="radio"
+                      checked={advance}
+                      onChange={() => setValue("advance", true)}
+                    />
+                    <b>Adelantar la cuota {selectedPeriod}</b>
+                    <small>Queda pagada desde ya; lo que sobre va a capital.</small>
+                  </label>
+                  <label className={!advance ? "on" : ""}>
+                    <input
+                      type="radio"
+                      checked={!advance}
+                      onChange={() => setValue("advance", false)}
+                    />
+                    <b>Abono al capital</b>
+                    <small>Todo rebaja el saldo; la cuota sigue pendiente.</small>
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -837,9 +866,7 @@ function Payments({
             className="button primary wide"
             type="submit"
           >
-            {scheduledPaymentAvailable
-              ? "Revisar y guardar"
-              : "Revisar abono al capital"}
+            {paysInstallment ? "Revisar y guardar" : "Revisar abono al capital"}
           </button>
         </form>
         <div className="panel">
@@ -944,7 +971,11 @@ function Payments({
               {!capitalOnly && draft && (
                 <div>
                   <dt>Fecha de pago</dt>
-                  <dd>{date(draft.paidOn)}</dd>
+                  <dd>
+                    {date(draft.paidOn)}
+                    {draft.paidOn < draft.date &&
+                      ` · ${Math.round((Date.parse(draft.date) - Date.parse(draft.paidOn)) / 86400000)} días antes`}
+                  </dd>
                 </div>
               )}
               {allocation.length > 1 && (
@@ -1102,7 +1133,17 @@ function Payments({
           setEditing(null);
         }}
       />
-      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
+      <ReceiptDialog
+        receipt={receipt}
+        onClose={() => {
+          // after saving a new payment, go back to the summary to see it applied
+          if (receipt?.justSaved) {
+            nav("/dashboard");
+            window.scrollTo(0, 0);
+          }
+          setReceipt(null);
+        }}
+      />
     </section>
   );
 }

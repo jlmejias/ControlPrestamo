@@ -1859,3 +1859,49 @@ button,
   font-size: 16px;
   font-weight: 650;
 }
+.choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.choice label {
+  position: relative;
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid #e3c98f;
+  border-radius: var(--radius);
+  background: #fffaf0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.choice label.on {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  background: #fff;
+}
+.choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.choice label:has(input:focus-visible) {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.period-notice .choice b {
+  font-size: 14px;
+  color: var(--ink);
+}
+.period-notice .choice small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-3);
+}
+@media (max-width: 420px) {
+  .choice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
