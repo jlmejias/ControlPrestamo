@@ -45,6 +45,7 @@ import {
   monthlyPayment,
   registeredRows,
   schedule,
+  valueToday,
   totalInterest,
 } from "./features/loan/loan-calculations";
 import type { LoanState, Payment } from "./features/loan/loan-types";
@@ -1488,6 +1489,17 @@ function Amortization({ state }: { state: LoanState }) {
   const current = rows.find(
     (r) => r.status === "Parcial" || r.status === "Proyectado",
   );
+  // Temporary learning columns: share of the installment that reduces the
+  // debt, and what each future installment is worth if prepaid today.
+  const settled = current ? current.period - 1 : rows.length;
+  const capitalShare = (r: (typeof rows)[number]) => {
+    const base = r.principal + r.interest;
+    return base > 0 ? `${((r.principal / base) * 100).toFixed(1).replace(".", ",")} %` : "—";
+  };
+  const todayValue = (r: (typeof rows)[number]) => {
+    const v = valueToday(state.config, r, settled);
+    return v === null ? "—" : money(v);
+  };
   function goToCurrent() {
     if (!current) return;
     document
@@ -1527,6 +1539,13 @@ function Amortization({ state }: { state: LoanState }) {
         <div>
           <h2>Tabla de amortización</h2>
           <p>Proyección completa ajustada con cada pago y abono.</p>
+          <p className="table-help">
+            <b>% a capital:</b> cuánto de la cuota rebaja la deuda; el resto son
+            intereses. <b>Valor hoy:</b> lo que vale hoy esa cuota, quitando los
+            intereses que se acumularían hasta su fecha. Por eso las lejanas
+            valen tan poco: si abonas hoy al capital el valor de la última cuota,
+            esa cuota desaparece.
+          </p>
         </div>
         <div className="head-actions">
           {current && (
@@ -1554,10 +1573,12 @@ function Amortization({ state }: { state: LoanState }) {
                 "Abono capital",
                 "Capital cuota",
                 "Interés",
+                "% a capital",
+                "Valor hoy",
                 "Saldo final",
                 "Estado",
               ].map((h, i) => (
-                <th key={h} scope="col" className={i > 1 && i < 9 ? "n" : undefined}>
+                <th key={h} scope="col" className={i > 1 && i < 11 ? "n" : undefined}>
                   {h}
                 </th>
               ))}
@@ -1579,6 +1600,8 @@ function Amortization({ state }: { state: LoanState }) {
                 <td className="n">{r.extra > 0 ? money(r.extra) : "—"}</td>
                 <td className="n">{money(r.principal)}</td>
                 <td className="n">{money(r.interest)}</td>
+                <td className="n">{capitalShare(r)}</td>
+                <td className="n">{todayValue(r)}</td>
                 <td className="n">{money(r.closing)}</td>
                 <td>
                   <span className={`status ${statusClass[r.status]}`}>

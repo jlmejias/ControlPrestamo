@@ -1960,3 +1960,14 @@ button,
   text-align: right;
   color: var(--ink-3);
 }
+.table-help {
+  max-width: 760px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.table-help b {
+  color: var(--ink-2);
+  font-weight: 650;
+}

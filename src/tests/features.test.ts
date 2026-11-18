@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocatePayment, dueStatus, round2, schedule, simulateExtra } from "../features/loan/loan-calculations";
+import { allocatePayment, dueStatus, round2, schedule, simulateExtra, valueToday } from "../features/loan/loan-calculations";
 import { generateStatement, statementLines } from "../features/loan/statement";
 import type { LoanState } from "../features/loan/loan-types";
 
@@ -94,5 +94,22 @@ describe("adelantar la siguiente cuota", () => {
     const row = schedule(config, [...first, ...part])[1];
     expect(row.status).toBe("Parcial");
     expect(round2(row.due - row.paid)).toBeGreaterThan(0);
+  });
+});
+
+describe("valor hoy de una cuota", () => {
+  it("abonar el valor hoy de la última cuota la elimina", () => {
+    const config = { principal: 34509726.97, annualRate: 8, years: 30, startDate: "2026-10-01", strategy: "reduce-term" as const };
+    let n = 0;
+    const id = () => `v${n++}`;
+    const first = allocatePayment(config, [], { amount: 253220.15, manualExtra: 0, paidOn: "2026-10-01", note: "" }, id);
+    const rows = schedule(config, first);
+    const v = valueToday(config, rows[359], 1)!;
+    expect(v).toBeGreaterThan(23000);
+    expect(v).toBeLessThan(23400);
+    const abono = allocatePayment(config, first, { amount: v, manualExtra: 0, paidOn: "2026-10-20", note: "", advance: false }, id);
+    const after = schedule(config, [...first, ...abono]);
+    expect(after.findIndex((r) => r.closing === 0)).toBe(358); // termina en la 359
+    expect(valueToday(config, rows[0], 1)).toBeNull(); // ya pagada
   });
 });

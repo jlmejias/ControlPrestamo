@@ -304,3 +304,18 @@ export function simulateExtra(
     installmentsSaved: before.installmentsLeft - after.installmentsLeft,
   };
 }
+
+/**
+ * What a future installment is worth today: the principal you would have to
+ * prepay now so that, with the interest it stops generating, it covers that
+ * installment. `fromPeriod` is the last period already settled.
+ */
+export function valueToday(config: LoanConfig, row: Row, fromPeriod: number) {
+  // the final projected row is marked "Liquidado", so go by period instead
+  if (row.period <= fromPeriod || row.status === "Posterior" || row.due <= 0) return null;
+  const owed = row.status === "Parcial" ? row.due - row.paid : row.due;
+  const months = Math.max(0, row.period - fromPeriod);
+  // rounded up to the whole colón: the ledger rounds every month to
+  // céntimos, and the exact formula can fall a few céntimos short
+  return Math.ceil(round2(owed / Math.pow(1 + config.annualRate / 100 / 12, months)));
+}
